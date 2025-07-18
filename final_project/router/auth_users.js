@@ -21,34 +21,35 @@ const authenticatedUser = (username, password) => {
         return false;
     }
 }
-//only registered users can login
 regd_users.post("/login", (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
 
-    // Check if username or password is missing
     if (!username || !password) {
-        return res.status(404).json({ message: "Error logging in" });
+        return res.status(400).json({ message: "Username and password are required" });
     }
 
-    // Authenticate user
     if (authenticatedUser(username, password)) {
-        // Generate JWT access token
-        let accessToken = jwt.sign({
-            data: password
-        }, 'access', { expiresIn: 60 * 60 });
+        // Generate token with username only
+        let accessToken = jwt.sign({ username }, 'access', { expiresIn: "1h" });
 
-        // Store access token and username in session
+        // Store in session if needed
         req.session.authorization = {
-            accessToken, username
-        }
-        return res.status(200).send("User successfully logged in");
+            accessToken,
+            username
+        };
+
+        // Return token to client (Postman)
+        return res.status(200).json({
+            message: "User successfully logged in",
+            token: accessToken
+        });
     } else {
-        return res.status(208).json({ message: "Invalid Login. Check username and password" });
+        return res.status(401).json({ message: "Invalid Login. Check username and password" });
     }
 });
 
-// Add a book review
+
 // Add a book review
 regd_users.put("/auth/review/:isbn", (req, res) => {
     const isbn = req.params.isbn;
@@ -78,6 +79,33 @@ regd_users.put("/auth/review/:isbn", (req, res) => {
         reviews: book.reviews
     });
 });
+regd_users.delete("/auth/review/:isbn", (req, res) => {
+    const isbn = req.params.isbn;
+    const username = req.session.authorization?.username;
+
+    // Validate authentication
+    if (!username) {
+        return res.status(401).json({ message: "User not authenticated" });
+    }
+
+    const book = books[isbn];
+    if (!book) {
+        return res.status(404).json({ message: "Book not found" });
+    }
+
+    // Check if review exists for user
+    if (!book.reviews[username]) {
+        return res.status(404).json({ message: "No review found for this user to delete" });
+    }
+
+    // Delete the review
+    delete book.reviews[username];
+
+    return res.status(200).json({
+        message: `Review for book ${isbn} deleted by ${username}`
+    });
+});
+
 
 
 module.exports.authenticated = regd_users;
